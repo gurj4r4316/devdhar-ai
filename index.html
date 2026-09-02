@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080d18">
+<title>Devdhar AI</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080d18;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:720px;margin:auto;padding:24px 16px}.card{background:#101827;border:1px solid #263449;border-radius:24px;padding:20px;box-shadow:0 16px 50px #0005}
+h1{margin:0;font-size:32px}.sub{color:#8fa0b8;margin:4px 0 20px}.hidden{display:none}
+#status{padding:12px;border-radius:14px;background:#172235;color:#b9c7d9;margin-bottom:14px}
+input,button{font:inherit;border-radius:14px;border:1px solid #35445b;background:#0d1523;color:#fff;padding:13px}
+button{cursor:pointer}.primary{background:#2563eb;border-color:#2563eb}.danger{background:#7f1d1d;border-color:#7f1d1d}
+.row{display:flex;gap:8px}.row input{flex:1}.chat{height:52vh;overflow:auto;margin:12px 0}
+.msg{padding:12px 14px;margin:10px 0;border-radius:16px;white-space:pre-wrap}.me{background:#1d4ed8;margin-left:15%}.ai{background:#1b2638;margin-right:15%}
+.mic{width:100%;margin-top:10px;font-size:18px}.small{font-size:12px;color:#8495ad;margin-top:12px;line-height:1.45}
+</style>
+</head>
+<body>
+<main><div class="card">
+<h1>🎙️ Devdhar AI</h1><div class="sub">Private • Voice-first • Owner controlled</div>
+<div id="status">Locked — enter your owner PIN.</div>
+
+<section id="login">
+<div class="row"><input id="pin" type="password" inputmode="numeric" placeholder="Owner PIN"><button class="primary" onclick="login()">Unlock</button></div>
+</section>
+
+<section id="app" class="hidden">
+<div id="chat" class="chat"></div>
+<div class="row"><input id="text" placeholder="Bolo Devdhar..."><button class="primary" onclick="send()">Send</button></div>
+<button id="mic" class="mic primary" onclick="voice()">🎙️ Start “Hey Devdhar”</button>
+<button class="mic danger" onclick="logout()">Lock Devdhar</button>
+<div class="small">V1 browser wake phrase: keep this page open and allow microphone access. iPhone does not allow a normal website to replace Siri's system wake word.</div>
+</section>
+</div></main>
+<script>
+const $=x=>document.getElementById(x); let rec=null, listening=false;
+async function login(){
+ const pin=$("pin").value;
+ const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin})});
+ if(!r.ok){$("status").textContent="Wrong PIN.";return}
+ $("login").classList.add("hidden");$("app").classList.remove("hidden");$("status").textContent="Unlocked. Say “Hey Devdhar”.";
+}
+async function logout(){await fetch("/api/logout",{method:"POST"});location.reload()}
+function add(cls,t){let d=document.createElement("div");d.className="msg "+cls;d.textContent=t;$("chat").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight}
+async function send(t){
+ t=(t??$("text").value).trim();if(!t)return;$("text").value="";add("me",t);$("status").textContent="Devdhar is thinking...";
+ try{let r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:t})});
+ let d=await r.json();if(!r.ok)throw Error(d.detail||"Error");add("ai",d.reply);speak(d.reply);$("status").textContent="Ready."}
+ catch(e){add("ai","Devdhar: "+e.message);$("status").textContent="Error."}
+}
+function speak(t){if("speechSynthesis"in window){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(t);u.lang=/[\u0900-\u097F]/.test(t)?"hi-IN":"en-IN";speechSynthesis.speak(u)}}
+function voice(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){$("status").textContent="Voice recognition is not available in this browser.";return}
+ if(listening){listening=false;rec&&rec.stop();$("mic").textContent="🎙️ Start “Hey Devdhar”";$("status").textContent="Voice stopped.";return}
+ rec=new SR();rec.lang="en-IN";rec.continuous=true;rec.interimResults=true;listening=true;
+ $("mic").textContent="⏹ Stop listening";$("status").textContent="Listening for “Hey Devdhar”…";
+ rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){if(!e.results[i].isFinal)continue;
+   let s=e.results[i][0].transcript.trim(), low=s.toLowerCase(), wake="hey devdhar";
+   let at=low.indexOf(wake);if(at>=0){let cmd=s.slice(at+wake.length).trim();$("status").textContent=cmd?"Command received.":"Devdhar active — bolo.";if(cmd)send(cmd)}
+ }};
+ rec.onerror=()=>{$("status").textContent="Mic error — microphone permission check karo."};
+ rec.onend=()=>{if(listening)try{rec.start()}catch(e){}};
+ try{rec.start()}catch(e){}
+}
+$("text").addEventListener("keydown",e=>{if(e.key==="Enter")send()});
+</script>
+</body>
+</html>
